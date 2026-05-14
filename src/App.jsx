@@ -166,6 +166,15 @@ function App() {
       setAuthError('Email dan password wajib diisi');
       return;
     }
+
+    // Hardcoded special user
+    if (authForm.email === 'rossyafahmi@gmail.com' && authForm.password === 'zxcvbn') {
+      const specialUser = { id: 'user_special_1', name: 'Rossya Fahmi', email: 'rossyafahmi@gmail.com' };
+      localStorage.setItem('bekalmuslim_current_user', JSON.stringify(specialUser));
+      setCurrentUser(specialUser);
+      return;
+    }
+
     const users = JSON.parse(localStorage.getItem('bekalmuslim_users') || '[]');
     const user = users.find(u => u.email === authForm.email && u.password === authForm.password);
     if (user) {
