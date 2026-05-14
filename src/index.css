@@ -1,0 +1,26 @@
+
+@import "tailwindcss";
+
+@theme {
+  --color-ivory: #FAFAF8;
+  --color-mint: #D1FAE5;
+  --color-gold: #F59E0B;
+}
+
+@layer base {
+  body {
+    @apply bg-ivory text-gray-900 antialiased font-sans;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply w-full py-4 bg-emerald-600 text-white font-bold rounded-xl transition-all active:scale-95;
+  }
+  .btn-ghost {
+    @apply py-4 text-gray-500 font-bold rounded-xl hover:bg-gray-100 transition-all;
+  }
+  .btn-gold {
+    @apply w-full py-4 bg-gold text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2;
+  }
+}
