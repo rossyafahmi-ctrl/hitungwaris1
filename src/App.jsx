@@ -11,8 +11,8 @@ const INITIAL_HEIRS = {
   [HEIR.ISTRI]: 0,
   [HEIR.ANAK_LK]: 0,
   [HEIR.ANAK_PR]: 0,
-  [HEIR.AYAH]: 1, 
-  [HEIR.IBU]: 1, 
+  [HEIR.AYAH]: 0, 
+  [HEIR.IBU]: 0, 
   [HEIR.CUCU_LK]: 0,
   [HEIR.CUCU_PR]: 0,
   [HEIR.KAKEK]: 0,
@@ -33,26 +33,85 @@ const INITIAL_HEIRS = {
 };
 
 function App() {
-  const [step, setStep] = useState(0); // 0: Landing, 1-3: Inputs, 4: Result, 5: Detail
-  const [viewHistory, setViewHistory] = useState(false);
-  const [openedFromHistory, setOpenedFromHistory] = useState(false);
+  const getSessionData = () => {
+    try {
+      const data = sessionStorage.getItem('waris_session_data');
+      return data ? JSON.parse(data) : null;
+    } catch(e) {
+      return null;
+    }
+  };
+
+  const getNavStack = () => {
+    try {
+      return JSON.parse(sessionStorage.getItem('waris_nav_stack') || '[]');
+    } catch(e) {
+      return [];
+    }
+  };
+
+  const setNavStack = (st) => {
+    try {
+      sessionStorage.setItem('waris_nav_stack', JSON.stringify(st));
+    } catch(e) {}
+  };
+
+  const [step, setStep] = useState(() => {
+    const s = getSessionData();
+    return s?.step !== undefined ? s.step : 0;
+  }); // 0: Landing, 1-3: Inputs, 4: Result, 5: Detail
+  const [viewHistory, setViewHistory] = useState(() => {
+    const s = getSessionData();
+    return s?.viewHistory !== undefined ? s.viewHistory : false;
+  });
+  const [openedFromHistory, setOpenedFromHistory] = useState(() => {
+    const s = getSessionData();
+    return s?.openedFromHistory !== undefined ? s.openedFromHistory : false;
+  });
   const printRef = useRef(null);
   
   // Data Pewaris & Harta States
-  const [gender, setGender] = useState('lk'); 
-  const [totalAssets, setTotalAssets] = useState('');
-  const [debt, setDebt] = useState('0');
-  const [will, setWill] = useState('0');
-  const [funeral, setFuneral] = useState('0');
-  const [showAssetDetail, setShowAssetDetail] = useState(false);
-  const [assetItems, setAssetItems] = useState([{ id: 1, name: '', value: '' }]);
+  const [gender, setGender] = useState(() => {
+    const s = getSessionData();
+    return s?.gender || 'lk';
+  }); 
+  const [totalAssets, setTotalAssets] = useState(() => {
+    const s = getSessionData();
+    return s?.totalAssets !== undefined ? s.totalAssets : '';
+  });
+  const [debt, setDebt] = useState(() => {
+    const s = getSessionData();
+    return s?.debt !== undefined ? s.debt : '0';
+  });
+  const [will, setWill] = useState(() => {
+    const s = getSessionData();
+    return s?.will !== undefined ? s.will : '0';
+  });
+  const [funeral, setFuneral] = useState(() => {
+    const s = getSessionData();
+    return s?.funeral !== undefined ? s.funeral : '0';
+  });
+  const [showAssetDetail, setShowAssetDetail] = useState(() => {
+    const s = getSessionData();
+    return s?.showAssetDetail !== undefined ? s.showAssetDetail : false;
+  });
+  const [assetItems, setAssetItems] = useState(() => {
+    const s = getSessionData();
+    return s?.assetItems || [{ id: 1, name: '', value: '' }];
+  });
   const [errors, setErrors] = useState({});
 
   // Heir States
-  const [heirs, setHeirs] = useState({ ...INITIAL_HEIRS });
+  const [heirs, setHeirs] = useState(() => {
+    const s = getSessionData();
+    return s?.heirs || { ...INITIAL_HEIRS };
+  });
 
   const [activeSection, setActiveSection] = useState(null);
-  const [calculationResult, setCalculationResult] = useState(null);
+  const [calculationResult, setCalculationResult] = useState(() => {
+    const s = getSessionData();
+    return s?.calculationResult || null;
+  });
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
@@ -62,6 +121,79 @@ function App() {
 
   // Auth State
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('bekalmuslim_current_user')) || null);
+
+  useEffect(() => {
+    if (currentUser) {
+      const sessionData = {
+        step,
+        viewHistory,
+        openedFromHistory,
+        gender,
+        totalAssets,
+        debt,
+        will,
+        funeral,
+        showAssetDetail,
+        assetItems,
+        heirs,
+        calculationResult
+      };
+      try {
+        sessionStorage.setItem('waris_session_data', JSON.stringify(sessionData));
+      } catch(e) {}
+    }
+  }, [step, viewHistory, openedFromHistory, gender, totalAssets, debt, will, funeral, showAssetDetail, assetItems, heirs, calculationResult, currentUser]);
+
+  useEffect(() => {
+    if (!window.history.state) {
+      window.history.replaceState({ step, viewHistory, openedFromHistory }, '', '');
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state) {
+        setStep(event.state.step !== undefined ? event.state.step : 0);
+        setViewHistory(event.state.viewHistory !== undefined ? event.state.viewHistory : false);
+        setOpenedFromHistory(event.state.openedFromHistory !== undefined ? event.state.openedFromHistory : false);
+      } else {
+        setStep(0);
+        setViewHistory(false);
+        setOpenedFromHistory(false);
+      }
+      const stack = getNavStack();
+      if (stack.length > 0) {
+        stack.pop();
+        setNavStack(stack);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleBack = (targetStep, targetViewHistory = false, targetOpenedFromHistory = false) => {
+    setErrors({});
+    const stack = getNavStack();
+    if (stack.length > 0 && window.history.state && window.history.length > 1) {
+      stack.pop();
+      setNavStack(stack);
+      window.history.back();
+    } else {
+      window.history.pushState({ step: targetStep, viewHistory: targetViewHistory, openedFromHistory: targetOpenedFromHistory }, '', '');
+      setStep(targetStep);
+      setViewHistory(targetViewHistory);
+      setOpenedFromHistory(targetOpenedFromHistory);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenHistory = () => {
+    const stack = getNavStack();
+    stack.push({ step, viewHistory, openedFromHistory });
+    setNavStack(stack);
+    window.history.pushState({ step: 0, viewHistory: true, openedFromHistory: false }, '', '');
+    setViewHistory(true);
+  };
   const [authPage, setAuthPage] = useState('login'); 
   const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [authError, setAuthError] = useState('');
@@ -109,6 +241,14 @@ function App() {
       setAssetItems([{ id: 1, name: '', value: '' }]);
       setHeirs({ ...INITIAL_HEIRS });
       setCalculationResult(null);
+      try {
+        sessionStorage.removeItem('waris_session_data');
+        sessionStorage.removeItem('waris_nav_stack');
+      } catch(e) {}
+      const stack = getNavStack();
+      stack.push({ step, viewHistory, openedFromHistory });
+      setNavStack(stack);
+      window.history.pushState({ step: 1, viewHistory: false, openedFromHistory: false }, '', '');
       setStep(1);
       setErrors({});
     }
@@ -136,6 +276,10 @@ function App() {
     
     const result = hitungWaris(inputData);
     setCalculationResult(result);
+    const stack = getNavStack();
+    stack.push({ step, viewHistory, openedFromHistory });
+    setNavStack(stack);
+    window.history.pushState({ step: 4, viewHistory: false, openedFromHistory: false }, '', '');
     setStep(4);
   };
 
@@ -155,7 +299,12 @@ function App() {
       }
     }
     setErrors({});
+    const stack = getNavStack();
+    stack.push({ step, viewHistory, openedFromHistory });
+    setNavStack(stack);
+    window.history.pushState({ step: to, viewHistory: false, openedFromHistory: false }, '', '');
     setStep(to);
+    setOpenedFromHistory(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -218,6 +367,10 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('bekalmuslim_current_user');
+    try {
+      sessionStorage.removeItem('waris_session_data');
+      sessionStorage.removeItem('waris_nav_stack');
+    } catch(e) {}
     setCurrentUser(null);
     setStep(0);
     setViewHistory(false);
@@ -283,6 +436,10 @@ function App() {
       hijabInfo: item.summary.hijab
     });
     
+    const stack = getNavStack();
+    stack.push({ step, viewHistory, openedFromHistory });
+    setNavStack(stack);
+    window.history.pushState({ step: 4, viewHistory: false, openedFromHistory: true }, '', '');
     setStep(4);
     setViewHistory(false);
     setOpenedFromHistory(true);
@@ -768,6 +925,11 @@ function App() {
                     </div>
                   </>
                 )}
+                {activeInfoPopup === 'parents' && (
+                  <>
+                    <p className="mb-3">Centang Ayah/Ibu jika orang tua pewaris masih hidup saat pewaris meninggal. Jika sudah wafat lebih dulu, jangan dicentang.</p>
+                  </>
+                )}
               </div>
               <button onClick={() => setActiveInfoPopup(null)} className="w-full mt-2 py-4 bg-emerald-600 text-white font-black text-sm uppercase rounded-2xl active:scale-95 transition-transform">Tutup</button>
             </div>
@@ -804,7 +966,7 @@ function App() {
 
             <div className="flex flex-col w-full gap-4 px-4 mt-8">
               <button 
-                onClick={() => { setOpenedFromHistory(false); setStep(1); }}
+                onClick={() => navigate(1)}
                 className="group relative overflow-hidden bg-emerald-600 text-white h-16 rounded-3xl font-black text-lg shadow-xl shadow-emerald-200 active:scale-95 transition-all w-full flex items-center justify-center"
               >
                 <span className="relative z-10">Mulai Perhitungan</span>
@@ -812,7 +974,7 @@ function App() {
               </button>
               
               <button 
-                onClick={() => setViewHistory(true)}
+                onClick={handleOpenHistory}
                 className="h-16 rounded-3xl font-black text-emerald-700 border-2 border-emerald-100 active:scale-95 transition-all text-sm uppercase tracking-widest hover:bg-emerald-50"
               >
                 Riwayat Perhitungan
@@ -829,7 +991,7 @@ function App() {
         {viewHistory && (
           <div className="flex flex-col gap-6 animate-in slide-in-from-right duration-500">
             <header className="flex items-center justify-between pb-4 border-b border-emerald-100">
-              <button onClick={() => { setViewHistory(false); setStep(0); setOpenedFromHistory(false); }} className="w-10 h-10 rounded-2xl bg-white border border-emerald-50 flex items-center justify-center text-emerald-600 shadow-sm active:scale-90">←</button>
+              <button onClick={() => handleBack(0, false, false)} className="w-10 h-10 rounded-2xl bg-white border border-emerald-50 flex items-center justify-center text-emerald-600 shadow-sm active:scale-90">←</button>
               <h2 className="text-xl font-black text-emerald-950 uppercase tracking-tighter">Riwayat</h2>
               <div className="w-10" />
             </header>
@@ -841,11 +1003,11 @@ function App() {
                     <div className="flex flex-col items-center justify-center py-20 text-center gap-6">
                       <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl opacity-20">📜</div>
                       <div className="flex flex-col gap-1">
-                        <h3 className="font-black text-slate-400 uppercase text-xs tracking-widest">Belum ada riwayat</h3>
+                        <h4 className="font-black text-slate-400 uppercase text-xs tracking-widest">Belum ada riwayat</h4>
                         <p className="text-sm text-slate-400 font-medium">Mulai hitung warisan pertama Anda.</p>
                       </div>
                       <button 
-                        onClick={() => { setViewHistory(false); setOpenedFromHistory(false); setStep(1); }}
+                        onClick={() => navigate(1)}
                         className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-emerald-100"
                       >
                         Mulai Perhitungan
@@ -896,7 +1058,10 @@ function App() {
         {step > 0 && step < 4 && !viewHistory && (
           <header className="flex flex-col gap-2 pt-4">
             <div className="flex justify-between items-center text-[10px] font-black tracking-widest text-emerald-600 uppercase">
-              <span>Step {step} of 3</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => handleBack(step - 1, false, false)} className="w-6 h-6 rounded-full bg-white border border-emerald-100 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 active:scale-95 font-bold">←</button>
+                <span>Step {step} of 3</span>
+              </div>
               <span>{Math.round((step / 3) * 100)}% Selesai</span>
             </div>
             <div className="w-full bg-emerald-100 h-1.5 rounded-full">
@@ -955,13 +1120,17 @@ function App() {
               {gender === 'lk' ? <StepperCard label="Istri" sub="(MAKSIMAL 4)" value={heirs[HEIR.ISTRI]} onDec={() => updateHeirCount(HEIR.ISTRI, -1)} onInc={() => updateHeirCount(HEIR.ISTRI, 1)} max={4} /> : <ToggleCard label="Suami" sub="(MAKSIMAL 1)" active={heirs[HEIR.SUAMI] === 1} onToggle={() => toggleHeir(HEIR.SUAMI)} />}
               <StepperCard label="Anak Laki-laki" value={heirs[HEIR.ANAK_LK]} onDec={() => updateHeirCount(HEIR.ANAK_LK, -1)} onInc={() => updateHeirCount(HEIR.ANAK_LK, 1)} />
               <StepperCard label="Anak Perempuan" value={heirs[HEIR.ANAK_PR]} onDec={() => updateHeirCount(HEIR.ANAK_PR, -1)} onInc={() => updateHeirCount(HEIR.ANAK_PR, 1)} />
-              <div className="grid grid-cols-2 gap-3 mt-2">
+              <div className="flex items-center justify-between mt-2 px-1">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Orang Tua Pewaris (Pilih jika masih hidup)</span>
+                <button onClick={() => setActiveInfoPopup('parents')} className="w-6 h-6 flex items-center justify-center bg-slate-100 text-slate-400 rounded-full font-bold hover:bg-slate-200 text-xs">ℹ️</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <ToggleCard label="Ayah" active={heirs[HEIR.AYAH] === 1} onToggle={() => toggleHeir(HEIR.AYAH)} />
                 <ToggleCard label="Ibu" active={heirs[HEIR.IBU] === 1} onToggle={() => toggleHeir(HEIR.IBU)} />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => navigate(1)} className="flex-1 bg-slate-200 py-5 rounded-2xl font-bold">Kembali</button>
+              <button onClick={() => handleBack(1, false, false)} className="flex-1 bg-slate-200 py-5 rounded-2xl font-bold">Kembali</button>
               <button onClick={() => navigate(3)} className="flex-[2] bg-emerald-600 text-white py-5 rounded-2xl font-bold">Lanjutkan</button>
             </div>
           </div>
@@ -999,7 +1168,7 @@ function App() {
             </AccordionSection>
             <div className="flex flex-col gap-4 mt-8">
               <button onClick={performCalculation} className="bg-amber-500 text-white rounded-3xl py-6 font-black text-xl shadow-xl hover:bg-amber-600 transition-all uppercase leading-none">PROSES HASIL</button>
-              <button onClick={() => navigate(2)} className="bg-transparent text-slate-500 py-2 rounded-xl text-sm font-bold">Kembali</button>
+              <button onClick={() => handleBack(2, false, false)} className="bg-transparent text-slate-500 py-2 rounded-xl text-sm font-bold">Kembali</button>
             </div>
           </div>
         )}
@@ -1009,14 +1178,7 @@ function App() {
           <div className="flex flex-col gap-6 animate-in fade-in duration-700">
             <div className="flex items-center gap-4">
               <button 
-                onClick={() => {
-                  if (openedFromHistory) {
-                    setOpenedFromHistory(false);
-                    setViewHistory(true);
-                  } else {
-                    setStep(1); 
-                  }
-                }} 
+                onClick={() => handleBack(openedFromHistory ? 0 : 3, openedFromHistory, false)} 
                 className="w-12 h-12 rounded-2xl border flex items-center justify-center bg-white"
               >
                 ←
@@ -1092,7 +1254,7 @@ function App() {
         {step === 5 && calculationResult && !viewHistory && (
           <div className="flex flex-col gap-6 animate-in fade-in duration-700">
             <div className="flex items-center gap-4">
-              <button onClick={() => navigate(4)} className="w-12 h-12 rounded-2xl border flex items-center justify-center bg-white shadow-sm">←</button>
+              <button onClick={() => handleBack(4, false, openedFromHistory)} className="w-12 h-12 rounded-2xl border flex items-center justify-center bg-white shadow-sm">←</button>
               <h1 className="text-2xl font-black text-emerald-900 tracking-tight">Dasar Pembagian</h1>
             </div>
             <Section title="Ringkasan Perhitungan">
@@ -1164,7 +1326,7 @@ function App() {
                 </div>
               </Section>
             )}
-            <button onClick={() => navigate(4)} className="bg-slate-900 text-white py-5 rounded-2xl font-black text-sm uppercase">Kembali ke Hasil</button>
+            <button onClick={() => handleBack(4, false, openedFromHistory)} className="bg-slate-900 text-white py-5 rounded-2xl font-black text-sm uppercase">Kembali ke Hasil</button>
           </div>
         )}
 
@@ -1333,18 +1495,18 @@ const AccordionSection = ({ title, id, active, onToggle, children }) => {
 };
 
 const ResultCard = ({ name, count, badge, share, amount, perOrang, isMulti }) => (
-  <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex items-center justify-between transition-transform active:scale-[0.98]">
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-black text-slate-800 uppercase tracking-tighter">{count > 1 ? `${count}x ` : ''}{name}</span>
-        <span className={`text-[7px] px-2 py-0.5 rounded-full font-black tracking-widest ${badge.includes('ASHABAH') ? 'bg-amber-100 text-amber-700' : badge.includes('RADD') || share?.includes('Radd') ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+  <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-transform active:scale-[0.98]">
+    <div className="flex flex-col gap-1.5 min-w-0">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-black text-slate-800 uppercase tracking-tighter break-words">{count > 1 ? `${count}x ` : ''}{name}</span>
+        <span className={`text-[7px] px-2 py-0.5 rounded-full font-black tracking-widest w-max ${badge.includes('ASHABAH') ? 'bg-amber-100 text-amber-700' : badge.includes('RADD') || share?.includes('Radd') ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
           {badge.includes('ASHABAH') ? 'ASHABAH' : share?.includes('Radd') ? 'RADD' : 'FURUDH'}
         </span>
       </div>
       <div className="bg-emerald-50 px-2 py-1 rounded-lg text-[9px] font-black text-emerald-600 uppercase w-max tracking-wide">BAGIAN: {share}</div>
-      {isMulti && perOrang && <div className="text-[9px] text-slate-400 font-bold">per orang: {formatIDR(perOrang)}</div>}
+      {isMulti && perOrang && <div className="text-[9px] text-slate-400 font-bold break-words">per orang: {formatIDR(perOrang)}</div>}
     </div>
-    <div className="text-xl font-black text-slate-800 tabular-nums">{formatIDR(amount)}</div>
+    <div className="text-lg sm:text-xl font-black text-slate-800 tabular-nums break-words self-start sm:self-auto">{formatIDR(amount)}</div>
   </div>
 );
 
