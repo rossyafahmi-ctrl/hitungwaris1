@@ -324,6 +324,13 @@ function App() {
       return;
     }
 
+    if (authForm.email === 'user' && authForm.password === 'zxcvbn') {
+      const specialUser2 = { id: 'user_special_2', name: 'User', email: 'user' };
+      localStorage.setItem('bekalmuslim_current_user', JSON.stringify(specialUser2));
+      setCurrentUser(specialUser2);
+      return;
+    }
+
     const users = JSON.parse(localStorage.getItem('bekalmuslim_users') || '[]');
     const user = users.find(u => u.email === authForm.email && u.password === authForm.password);
     if (user) {
@@ -833,7 +840,7 @@ function App() {
             )}
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-black uppercase text-emerald-700 ml-1">Email</label>
-              <input type="email" value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:border-emerald-500 outline-none" placeholder="alamat@email.com" />
+              <input type="text" value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:border-emerald-500 outline-none" placeholder="alamat@email.com" />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-black uppercase text-emerald-700 ml-1">Password</label>
